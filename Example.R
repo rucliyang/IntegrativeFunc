@@ -38,23 +38,24 @@ source("Functions.R")
 ###############################################################
 ### Generate simulated datasets:            
 
-# Set values to input variables.
+# Set values for input variables.
 rangeval <- c(0,1)
 sigma <- matrix(c(1,0.9,0.9,1), ncol=2)
+pCand <- 0.5 # Under the Hardy-Weinberg equilibrium: frequency p_a.
 
-# Generate simulated datasets under the setting of Case I, beta1=Beta8a and beta2=Beta8c, aMat=normal(0,1), sigma=matrix(c(1,0.9,0.9,1), ncol=2).
-data <- generate.datasets(rangeval, nruns=3, n=150, nTest=150,  Beta8a, Beta8c, intercept1=F, intercept2=F, estX=T)
-#saveRDS(data, file="sample_code_data_nruns3_cor90_norm01")
+# Generate simulated datasets under the setting of Case I, beta1=Beta8a and beta2=Beta8b, aMat=normal(0,1), sigma=matrix(c(1,0.9,0.9,1), ncol=2).
+data <- generate.datasets(rangeval, nruns=50, n=150, nTest=150,  Beta8a, Beta8b, intercept1=F, intercept2=F, estX=T, pCand, aMat_Fun="Norm")
+# saveRDS(data, file="Data8a8b_nruns50_cor90_norm01")
 
 
 ###############################################################
 ### Estimate the simulated dataset generated above: 
 
-# Set values to input variables.
+# Set values for input variables.
 Beta.i=Beta8a
-Beta.ii=Beta8c
+Beta.ii=Beta8b
 Beta1Tru.text="Beta8a"
-Beta2Tru.text="Beta8c"
+Beta2Tru.text="Beta8b"
 estX=T
 xcoef.mod=F
 int1=F  
@@ -75,11 +76,10 @@ basisfd.beta <- basisfd
 # Suggested tuning candidates. Note, candidates vary in different settings.
 lambda1=c(0.14,0.16,0.18,0.2)
 lambda2=c(0.4,0.5,0.6)
-gamma=c(1.1e-10,1.2e-10,1.3e-10) 
+gamma=c(1e-10,2e-10,3e-10) 
 
-# Estimate simulated dataset
-# data <- readRDS(file="sample_code_data_nruns3_cor90_norm01")
-results <- estimate.datasets(nruns=3, data, lambda1, lambda2, gamma, max.iter, tol, a, cutoff, int1, int2, estX, xcoef.mod, LLrate, Beta.i, Beta.ii, Beta1Tru.text, Beta2Tru.text)
+# Estimate the simulated dataset.
+results <- estimate.datasets(nruns=50, data, lambda1, lambda2, gamma, max.iter, tol, a, cutoff, int1, int2, estX, xcoef.mod, LLrate, Beta.i, Beta.ii, Beta1Tru.text, Beta2Tru.text)
 
 
 
