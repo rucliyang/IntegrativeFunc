@@ -170,11 +170,11 @@ Beta3d <- function(t) {
 
 
 
-##################### Calculate InnerProd #####################
+####################### Calculate InnerProd #######################
 InnerProd <- function(Betaf,basisfd,j) {
-# 	Compute the <beta_j, B_j>, integral of beta_j and B_j. 
-# 	Betaf: Beta function.
-# 	basis: Basis function, jth column of basismatrix (eval.basis) (t rows and nbasis columns).
+	# compute the <beta_j, B_j>, integral of beta_j and B_j. 
+	# Betaf: beta function, i.e. Beta1, Beta2, Beta3, Beta4, predefined.
+	# basis: basis function, jth column of basismatrix (eval.basis) (t rows and nbasis columns)
 	
 	rng <- getbasisrange(basisfd)
 	knots <- basisfd$param
@@ -198,25 +198,21 @@ InnerProd <- function(Betaf,basisfd,j) {
 	in.prod <- integrate(flog,a,b) 
 	return(in.prod$value)
 }
-############################################################
+###########################################################
 
 
 
 
-################ Generate Data (single data) ###############
-DataYBeta <- function(n, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, sigma, estX=T){
-# 	Input:
-#	intercept: Intercept of the model.
-# 	rangeval: Domain of t.
-# 	n: Size of one dataset.
-#	Beta.i/Beta.ii: Beta functions.
-#	estX: "T" if derive xHat(t) from x(t).
-#
-# 	Output: 
-# 	This function will generate a single dataset with size n. It contains: (1) intercept, original x(t), derived xHat(t), modified xHatBar(t) and xHatSD(t), sigma, signal to noise simga (sigmaSTN), various variables of response (y1, y2, yStar, y, y1Tru, y2Tru). 
-# 	Note 1: The distribution of the "a Matrix" need to be specified in this function as aij.  For the use of the sample code, we set it to normal(0,1).
-# 	Note 2: intercept1 and intercept2 in data generation are always set to "F" (i.e. =0), but in estimation stage, different notations (int1 and int2) are used and they could be T or F. 
-# 	Note 3: y1 and y2 are n-dimensional vectors for the first and second phenotypes; yStar is a n-by-2 matrix (=cbind(y1,y2)); y is a 2n-dimensional vector (=rbind(y1,y2)); y1Tru and y2Tru are y1 and y2 without error terms, respectively.
+#################### Generate Data (single data) ####################
+DataYBeta <- function(n, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, sigma, estX=T, pCand, aMat_Fun){
+	# intercept: intercept of the model
+	# rangeval: domain of t
+	# n: sample size of one dataset
+	#
+	# Output: 
+	# This function will result a single dataset with size n. It contains the result of x1(t), y1, x2(t), y2, intercpet1, and intercept2.. 
+	# note: intercept1 and intercept2 in data generation are always set to F (i.e. =0), but in estimation stage, different notations (int1 and int2) are used and they could be T or F. 
+	# datasep$y1 will give y1 from dataset.
 	
 	nnknots <- 100
 	nnbasis <- nnknots + 3 - 2
@@ -234,15 +230,21 @@ DataYBeta <- function(n, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, 
 	} 
 	
 	
-	# Setting "aMat" aij, which is the coefficient of x(t).
-	# Two kinds of aMat: normal(0,1) or uniform(-2,2).
-	aMat <- matrix(rnorm(n*nnbasis,mean=0,sd=1),n,nnbasis)
-	#aMat <- matrix(runif(n*nnbasis,min=-2,max=2),n,nnbasis)
+	# aij, coefficient of basis functionB_j
+	if (aMat_Fun == "Norm") 
+	{
+		aMat <- matrix(rnorm(n*nnbasis,mean=0,sd=1),n,nnbasis)
+	}else if (aMat_Fun=="Unif")
+	{
+		aMat <- matrix(runif(n*nnbasis,min=-2,max=2),n,nnbasis)
+	}
 	
 	
 	y1Tru <- intercept1 + aMat%*%G1
 	y2Tru <- intercept1 + aMat%*%G2
 	
+	
+	#signal to noise = 4
 	ep <- rmvnorm(n=n, mean=c(0,0), sigma=sigma)
 	
 	y1Sig <- sd(y1Tru)
@@ -253,9 +255,14 @@ DataYBeta <- function(n, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, 
 	y1 <- y1Tru + y1e
 	y2 <- y2Tru + y2e
 	
-	#Signal to noise sigma.
+	
 	sigmaSTN <- cov(cbind(y1e, y2e))
 	
+	#no signal to noise
+	#sigma <- matrix(c(0.003,0,0,0.003), ncol=2)
+	#ep <- rmvnorm(n=n, mean=c(0,0), sigma=sigma)
+	#y1 <- y1Tru + ep[,1]
+	#y2 <- y2Tru + ep[,2]
 
 	yStar <- as.data.frame(cbind(y1, y2)) # n by 2 matrix
 	y <- NULL
@@ -264,15 +271,16 @@ DataYBeta <- function(n, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, 
 		y <- rbind(y,rbind(y1[i,],y2[i,]))
 	}
 	
-
+	
+	
 	x<- fd(coef=t(aMat), basisobj=basisfdData)
 	
 	xHat <- NULL
 	xGeno <- NULL
-	# For data with SNP as predictors, derive xHat(t) from G=0,1,2.
+	# for real data as SNP, continous x need to be estimated from 0,1,2
 	if (estX)
 	{
-		XX <- EstX(x, mode="additive", basisfdData)
+		XX <- EstX(x, mode="additive", basisfdData, pCand)
 		xHat <- XX$xHat
 		xHatBar <- XX$xHatBar
 		xHatSD <- XX$xHatSD
@@ -284,18 +292,17 @@ DataYBeta <- function(n, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, 
 	
 	return(data)		
 }
-############################################################
+###############################################################
 
 
 
 
 ################### Generate Data with EstX ##################
-### Derive xHat(t).                                        ###
-### This function first convert x(t) to discrete G=0,1,2,  ###
-### then derive xHat(t) from G.                            ###
-EstX <- function(x, mode="Additive", basisfd){
-# 	Note 1: In this analysis, we use the additive method only, so mode="Additive" is the default setting.
-#	Note 2: xHatBar(t) and xHatSD(t) are modified xHat(t). xHat(t) is used in this analysis. xHatBar(t) and xHatSD(t) are optional variables.  The indicator variable xcoef.mod=T are applied if these two variables are used.
+### Estimation of genetic variant function                 ###
+### Convert continous values to 0,1,2                      ###
+### Then estimate it to hat(X_i(t))                        ###
+
+EstX <- function(x, mode="Additive", basisfd, pCand){
 	nbasis <- basisfd$nbasis
 	rng <- getbasisrange(basisfd)
 	rng.a <- rng[1]
@@ -304,36 +311,25 @@ EstX <- function(x, mode="Additive", basisfd){
 	t <- seq.int(rng.a, rng.b, rng.b/(m-1)) 
 	evalX <- t(eval.fd(t,x)) # n by nbasis matrix
 
+	# Select a probability of p from a list of values per SNP
+	pVec=sample(pCand, ncol(evalX),replace=TRUE)
 	
-	# Set evalX to 0,1,2 in "geno"
-	geno<- evalX*0
-	for (i in 1:nrow(evalX))
-		for (j in 1:ncol(evalX))
-		{
-			if (evalX[i,j] <= quantile(evalX[i,], 1/3)) {geno[i,j]=0} 
-			else if (evalX[i,j] > quantile(evalX[i,], 2/3)) {geno[i,j]=2}
-			else {geno[i,j]=1}
-		}
+	# set continous evalX to 0,1,2 in "geno"
+	# geno<- evalX*0
+	geno <- matrix(1, dim(evalX)[1], dim(evalX)[2])
+	for (j in 1:ncol(evalX))
+	{
+		# Hardy-Weinberg equilibrium
+		pSelc=pVec[j]
+		p0=pSelc^2
+		p2=(1-pSelc)^2
+		p1=2*pSelc*(1-pSelc)
 	
-	# (Optional) Set geno to genoX if Dominant or Recessive effect is of interest.
-	genoX <- evalX*0
-	for (i in 1:nrow(evalX))
-		for (j in 1:ncol(evalX))
-		{
-			if (mode == "Dom")
-			{
-				if (geno[i, j] == 1 || geno[i, j] == 2)
-            	genoX[i,j] = 1
-			}
-			else if ( mode == "Rec")
-			{
-            	if (geno[i, j] == 2)
-                genoX[i,j] = 1
-            }
-		}
-	
-	if  ( mode == "Rec" || mode == "Dom")
-      geno = genoX 	
+		genoInd_0 <- evalX[,j] <= quantile(evalX[,j], p0)
+		geno[genoInd_0,j]=0
+		genoInd_2 <- evalX[,j] > quantile(evalX[,j], p0+p1)
+		geno[genoInd_2,j]=2
+	}
 	
 	
 	nsample <- nrow(geno)
@@ -348,7 +344,8 @@ EstX <- function(x, mode="Additive", basisfd){
     Ubar <- U-mean(U)
     Usd <- (U-mean(U))/sd(U)
 	
-	
+		
+	#return(data)	
 	results <- list(xHat=fd(coef=t(U), basisobj=basisfd), xHatBar=fd(coef=t(Ubar), basisobj=basisfd), xHatSD=fd(coef=t(Usd), basisobj=basisfd), geno=geno)
 	return(results)		
 }
@@ -357,11 +354,11 @@ EstX <- function(x, mode="Additive", basisfd){
 
 
 
-
 ########################## Replicates #########################
-### Generate Traing and Testing datasets with replicates.   ###
-generate.datasets <- function(rangeval, nruns, n, nTest, Beta.i, Beta.ii, intercept1=F, intercept2=F, estX)
+### Generate datasets over replicates                       ###
+generate.datasets <- function(rangeval, nruns, n, nTest, Beta.i, Beta.ii, intercept1=F, intercept2=F, estX, pCand, aMat_Fun)
 {
+
 	simuData <- list()	
 	train <- list()
 	test <- list()
@@ -371,8 +368,8 @@ generate.datasets <- function(rangeval, nruns, n, nTest, Beta.i, Beta.ii, interc
 	{
 		print(sprintf('running=%d',i))
 
-		train[[i]] <- DataYBeta(n, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, sigma, estX) 
-        if(nTest > 0) test[[i]] <- DataYBeta(nTest, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, sigma, estX) 
+		train[[i]] <- DataYBeta(n, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, sigma, estX, pCand, aMat_Fun) 
+        if(nTest > 0) test[[i]] <- DataYBeta(nTest, rangeval, intercept1=F, intercept2=F, Beta.i, Beta.ii, sigma, estX, pCand, aMat_Fun) 
 
 		i <- i + 1	
 	}
